@@ -5,7 +5,9 @@ from functools import total_ordering
 class Indexer:
     shrort_repr = False
 
-    def __init__(self, code, index=0, line=0, column=1):
+    def __init__(self, code: str, index=0, line=0, column=1):
+        if code.__class__.__name__ != "CharStream":
+            raise
         self.code = code
         self.i = index
         self.line = line

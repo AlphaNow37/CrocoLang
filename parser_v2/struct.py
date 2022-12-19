@@ -30,8 +30,8 @@ class BasicStruct:
             obj = self.factory(*self._getargs(obj))
         return obj, index
 
-    def expect(self, message):
-        return Expected(self, message)
+    def expect(self, message, etype=SyntaxError):
+        return Expected(self, message, etype=etype)
 
     def __add__(self, other):
         return Seq(self, other)
@@ -172,9 +172,10 @@ class Repeat(BasicStruct):
         return super().set_factory(factory)
 
 class Expected(BasicStruct):
-    def __init__(self, struct, message, factory=None):
+    def __init__(self, struct, message, factory=None, etype=SyntaxError):
         self.struct = _convert(struct)
         self.message = message
+        self.etype = etype
         super().__init__(factory)
 
     def __repr__(self):
@@ -183,8 +184,12 @@ class Expected(BasicStruct):
     def _parse(self, namespace, index, code) -> (object | None, int):
         value, index = self.struct.parse(namespace, index, code)
         if value is None:
-            print(repr(code[index.i:]))
-            raise SyntaxError(self.message.format(i=index, code=code, ns=namespace))
+            e = self.etype(self.message.format(i=index, code=code, ns=namespace))
+            e.lineno = index.line + 1
+            # e.offset = index.column
+            # e.end_offset = -1
+            # e.end_lineno = index.line + 1
+            raise e
         return value, index
 
 class Not(BasicStruct):
@@ -195,10 +200,11 @@ class Not(BasicStruct):
 
     def _parse(self, namespace, index, code) -> (object | None, int):
         value, _ = self.struct.parse(namespace, index, code)
-        if value is None and index+self.increment <= len(code):
+        right = index + self.increment
+        if value is None and right <= len(code):
             if self.increment == 0:
                 return "", index
-            return index.get_token(self.increment), index+self.increment
+            return index.get_token(self.increment), right
         return None, index
 
 class UpdateNameSpace(BasicStruct):

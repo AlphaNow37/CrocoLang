@@ -102,7 +102,7 @@ def parser():
     _INDENT_CHARS = P.Any(*" \t")
     INDENT = (P.Repeat(
         _INDENT_CHARS, mini=P.Var("indent"), maxi=P.Var("indent")
-    ) + P.Not(_INDENT_CHARS, increment=0).expect("Too many indentations line {i.line} {i.column}")
+    ) + P.Not(_INDENT_CHARS, increment=0).expect("Too many indentations line {i.line} {i.column}", etype=IndentationError)
               ).set_factory(lambda v: "")
 
     LINE = (INDENT + P.Repeat(STATEMENT, join=";") + (P.END | "\n")).set_factory(lambda v: v[1])
@@ -127,17 +127,22 @@ def parser():
                     + _make_flowcontrol(ELIF) * P.REPEAT
                     + _make_flowcontrol(ELSE) * P.OPT).set_factory(join_elses)
 
-    BLOCK = ((LINE | EMPTY_LINE | FLOW_CONTROL) * P.MINI_1).set_factory(blocks.Block.from_toks)
+    BLOCK = ((EMPTY_LINE | LINE | FLOW_CONTROL) * P.MINI_1).set_factory(blocks.Block.from_toks)
 
     return type("CrocoParser", (P.Parser,), locals(), start=BLOCK)
 
 
 crocoparser = parser()
 
-def croco_compile(code, filename="Unkown"):
-    tokens = crocoparser(code)
-    tokens = first_pass.first_pass(tokens, filename)
-    return encoder.to_code(tokens)
+def croco_compile(code, filename="Unkown", mode="exec"):
+    try:
+        tokens = crocoparser(code)
+        tokens = first_pass.first_pass(tokens, filename)
+        return encoder.to_code(tokens, as_expr=mode == "eval")
+    except SyntaxError as e:
+        e.filename = filename
+        e.text = code.split("\n")[e.lineno - 1]
+        raise
 
 def run(code, filename="Unkown"):
     code = croco_compile(code, filename)

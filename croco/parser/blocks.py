@@ -12,6 +12,8 @@ class Block(Statement):
     @classmethod
     def from_toks(cls, lines):
         lines = [smt for line in lines for smt in line]
+        if not lines:
+            return cls([], 0)
         return cls(lines, lines[0].line)
 
     def first_pass(self, ctx):
@@ -131,6 +133,10 @@ class _FlowControlController(Statement):
         super().__init__(line)
 
     def first_pass(self, ctx):
+        if not ctx.actual_loop:
+            e = SyntaxError("break/continue outside loop")
+            e.lineno = self.line + 1
+            raise e
         self.loop: For | While = ctx.actual_loop
 
     @classmethod
