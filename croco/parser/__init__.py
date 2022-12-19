@@ -12,9 +12,9 @@ def second_level(toklist):
 
 def assign_block(toklist):
     match toklist:
-        case [_, blocks.FlowControl() as flow_control, ":" as dbpoints, (list() as ins, True | "\n")]:
+        case [_, blocks.FlowControl() as flow_control, ":" as dbpoints, _, (list() as ins, True | "\n")]:
             block = blocks.Block(ins, dbpoints.start_line)
-        case [_, blocks.FlowControl() as flow_control, ":" as dbpoints, ("\n", blocks.Block() as block)]:
+        case [_, blocks.FlowControl() as flow_control, ":" as dbpoints, _, ("\n", blocks.Block() as block)]:
             block.line = dbpoints.start_line
         case _:
             print(toklist)
@@ -64,6 +64,7 @@ def parser():
         P.Var("quote_char").expect("Unclosed quote {ns['quote_char']}"),
         factory=expr.String.from_toks)
 
+
     CONSTANT = NUMBER | STRING
     IDENTIFIER = (P.Any(*"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_") * P.MINI_1).set_factory(
         expr.VarName.from_toks)
@@ -91,15 +92,16 @@ def parser():
 
     BREAK = P.Str("break").set_factory(blocks.Break.from_toks)
     CONTINUE = P.Str("continue").set_factory(blocks.Continue.from_toks)
+    PASS = P.Str("pass").set_factory(stmt.Pass.from_toks)
 
     STATEMENT = (
-        BREAK | CONTINUE
+        BREAK | CONTINUE | PASS
         | AFFECTATION
         | EXPRESSION
     )
 
     indent = 0
-    _INDENT_CHARS = P.Any(*" \t")
+    _INDENT_CHARS = P.Any(" "*4, "\t")
     INDENT = (P.Repeat(
         _INDENT_CHARS, mini=P.Var("indent"), maxi=P.Var("indent")
     ) + P.Not(_INDENT_CHARS, increment=0).expect("Too many indentations line {i.line} {i.column}", etype=IndentationError)
@@ -117,7 +119,7 @@ def parser():
     ELSE = P.Sequence("else", factory=lambda toklist: blocks.FlowControl(None, toklist[0].start_line))
 
     def _make_flowcontrol(line):
-        return (INDENT + line + ":" + (
+        return (INDENT + line + ":" + INLINE_SPACES * P.REPEAT +  (
                 (P.Repeat(STATEMENT, join=";", mini=1) + (P.END | "\n"))
                 | P.Str("\n") + P.UNS(P.Var("BLOCK").expect("Expected a block, line {i.line}"),
                                       indent=P.Var("indent").add(1)))
@@ -144,15 +146,15 @@ def croco_compile(code, filename="Unkown", mode="exec"):
         e.text = code.split("\n")[e.lineno - 1]
         raise
 
-def run(code, filename="Unkown"):
+def run(code, filename="Unkown", mode="exec"):
     code = croco_compile(code, filename)
-    print("___")
-    return exec(code)
+    # import dis
+    # dis.dis(code)
+    return exec(code) if mode == "exec" else eval(code)
 
 if __name__ == '__main__':
     code = """
-for _ in range(10):
-    break
+while True:pass
 """.removeprefix("\n").removesuffix("\n").replace(" "*4, "\t")
     compiled = compile(code, "test", "exec")
     # exec (compiled)

@@ -73,3 +73,16 @@ class Affectation(Statement):
             ctx.vars.add(self.variable.name)
         self.value.first_pass(ctx)
         self.variable.first_pass(ctx)
+
+
+class Pass(Statement):
+    def _repr(self):
+        return "pass"
+
+    def to_stmt_code(self, gen: code_creator.CodeGenerator):
+        gen.line = self.line
+        gen += "NOP"
+
+    @classmethod
+    def from_toks(cls, t):
+        return cls(t.start_line)
