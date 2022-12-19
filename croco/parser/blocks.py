@@ -87,11 +87,16 @@ class While(_ConditionLikeFlowControl):
         return f"while {self.expr}: {self.block}"
 
     def to_stmt_code(self, gen):
+        self.start = gen.actual_ins_index
         with gen.jump_abs_back():
             self.expr.to_expr_code(gen)
             with gen.jump_to("POP_JUMP_IF_FALSE", add=1):
                 super().to_stmt_code(gen)
         self.add_else_clause(gen)
+
+    def first_pass(self, ctx):
+        with ctx.loop(self):
+            return super().first_pass(ctx)
 
 class For(FlowControl):
     def __init__(self, var, expr, block, line):
@@ -109,12 +114,44 @@ class For(FlowControl):
     def to_stmt_code(self, gen):
         self.expr.to_expr_code(gen)
         gen += "GET_ITER"
+        self.start = gen.actual_ins_index
         with gen.jump_abs_back(), gen.jump_forward("FOR_ITER", add=1):
             self.var.store(gen)
             super().to_stmt_code(gen)
         self.add_else_clause(gen)
 
     def first_pass(self, ctx):
-        self.expr.first_pass(ctx)
-        self.var.first_pass(ctx)
-        return super().first_pass(ctx)
+        with ctx.loop(self):
+            self.expr.first_pass(ctx)
+            self.var.first_pass(ctx)
+            return super().first_pass(ctx)
+
+class _FlowControlController(Statement):
+    def __init__(self, line):
+        super().__init__(line)
+
+    def first_pass(self, ctx):
+        self.loop: For | While = ctx.actual_loop
+
+    @classmethod
+    def from_toks(cls, ins):
+        return cls(ins.start_line)
+
+    def to_stmt_code(self, gen):
+        gen.line = self.line
+
+class Break(_FlowControlController):
+    def _repr(self):
+        return "break"
+
+    def to_stmt_code(self, gen):
+        super().to_stmt_code(gen)
+        gen += "JUMP_ABSOLUTE", self.loop.end_partial
+
+class Continue(_FlowControlController):
+    def _repr(self):
+        return "continue"
+
+    def to_stmt_code(self, gen):
+        super().to_stmt_code(gen)
+        gen += "JUMP_ABSOLUTE", self.loop.start

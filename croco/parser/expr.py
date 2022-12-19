@@ -1,3 +1,5 @@
+from opcode import cmp_op
+
 from code_creator import CodeGenerator
 
 from croco.parser.stmt import Statement
@@ -5,7 +7,7 @@ from croco.parser.consts import OP_TO_NAME
 
 class Expr(Statement):
     def to_expr_code(self, gen: CodeGenerator):
-        raise NotImplementedError
+        gen.line = self.line
 
     def to_stmt_code(self, gen: CodeGenerator):
         self.to_expr_code(gen)
@@ -23,6 +25,7 @@ class Constant(Expr):
         return self.value
 
     def to_expr_code(self, gen: CodeGenerator):
+        super().to_expr_code(gen)
         gen += "LOAD_CONST", gen.const(self.value)
 
     def store(self, gen):
@@ -55,6 +58,7 @@ class VarName(Expr):
         return super().first_pass(ctx)
 
     def to_expr_code(self, gen: CodeGenerator):
+        super().to_expr_code(gen)
         if self.name in self.ctx.vars:
             gen += "LOAD_NAME", gen.name(self.name)
         else:
@@ -88,6 +92,7 @@ class Op(Expr):
         return f"{self.left} {self.op} {self.right}"
 
     def to_expr_code(self, gen: CodeGenerator):
+        super().to_expr_code(gen)
         self.left.to_expr_code(gen)
         self.right.to_expr_code(gen)
         gen += f"BINARY_{OP_TO_NAME[self.op]}"
@@ -100,12 +105,63 @@ class Op(Expr):
         self.right.first_pass(ctx)
         return super().first_pass(ctx)
 
+class CmpOp(Expr):
+    def __init__(self, parts, ops, line):
+        super().__init__(line)
+        self.parts: list[Expr] = parts
+        self.ops: list[str] = ops
+        assert len(self.parts) == len(self.ops) + 1
+
+    def first_pass(self, ctx):
+        for part in self.parts:
+            part.first_pass(ctx)
+        return super().first_pass(ctx)
+
+    def _repr(self):
+        return str(self.parts[0]) + "".join(f" {op} {part}" for op, part in zip(self.ops, self.parts[1:]))
+
+    @classmethod
+    def from_toks(cls, toklist):
+        if not toklist[1]:
+            return toklist[0]
+        parts = [toklist[0]]
+        ops = []
+        for op, part in toklist[1]:
+            ops.append(op)
+            parts.append(part)
+        return cls(parts, ops, toklist[0].line)
+
+
+    def to_expr_code(self, gen: CodeGenerator):
+        Expr.to_expr_code(self, gen)
+        end = gen.partial()
+        self.parts[0].to_expr_code(gen)
+        for i, (op, part) in enumerate(zip(self.ops, self.parts[1:])):
+            part.to_expr_code(gen)
+            if i != len(self.ops) - 1:
+                gen += "DUP_TOP"
+                gen += "ROT_THREE"
+            gen += f"COMPARE_OP", cmp_op.index(op)
+            if i == len(self.ops) - 1:
+                gen += "JUMP_FORWARD", 2
+            else:
+                gen += "JUMP_IF_FALSE_OR_POP", end
+        end.set(gen.actual_ins_index)
+        gen += "ROT_TWO"
+        gen += "POP_TOP"
+
+
+    def store(self, gen):
+        raise SyntaxError("Cannot assign to a comparison")
+
+
 class SecondLevel(Expr):
     def __init__(self, line, obj=None):
         self.obj = obj
         super().__init__(line)
 
     def to_expr_code(self, gen: CodeGenerator):
+        super().to_expr_code(gen)
         self.obj.to_expr_code(gen)
 
     def store(self, gen):

@@ -1,3 +1,4 @@
+from opcode import cmp_op
 
 import parser_v2 as P
 from croco.parser import expr, stmt, blocks, encoder, first_pass
@@ -46,10 +47,10 @@ def bracketed(value, brackets="()"):
 def _spacable(v):
     return P.Sequence(P.Var("SPACES"), v, P.Var("SPACES")).set_factory(lambda v: v, indexes=[1])
 
-def operator(ops, sup):
+def operator(ops, sup, factory=expr.Op.from_toks):
     return (sup + (
             P.SaveAs(P.Any(*ops), "last_op") + sup.expect("Expected expression after operator {ns[last_op]} line {i.line}")
-    ) * P.REPEAT).set_factory(expr.Op.from_toks)
+    ) * P.REPEAT).set_factory(factory)
 
 
 
@@ -77,9 +78,10 @@ def parser():
     EXPONENT = operator(["**"], SECOND_LEVEL)
     MULTIPLICATION = operator("*/", EXPONENT)
     ADDITION = operator("+-", MULTIPLICATION)
+    COMPARISON = operator(cmp_op, ADDITION, factory=expr.CmpOp.from_toks)
 
     EXPRESSION = (
-        ADDITION
+        COMPARISON
     )
     EXPECTED_EXPR = EXPRESSION.expect("expected an expression")
 
@@ -87,8 +89,12 @@ def parser():
     AFFECTABLE = SECOND_LEVEL
     AFFECTATION = (AFFECTABLE + _INPLACE_OP*P.OPT + "=" + EXPRESSION).set_factory(stmt.Affectation.from_toks)
 
+    BREAK = P.Str("break").set_factory(blocks.Break.from_toks)
+    CONTINUE = P.Str("continue").set_factory(blocks.Continue.from_toks)
+
     STATEMENT = (
-        AFFECTATION
+        BREAK | CONTINUE
+        | AFFECTATION
         | EXPRESSION
     )
 
@@ -140,18 +146,17 @@ def run(code, filename="Unkown"):
 
 if __name__ == '__main__':
     code = """
-a = 0
-if a:
-    print("hello")
-print("hey")
+for _ in range(10):
+    break
 """.removeprefix("\n").removesuffix("\n").replace(" "*4, "\t")
     compiled = compile(code, "test", "exec")
+    # exec (compiled)
     import dis
     dis.dis(compiled)
     # print(dis.code_info(compiled))
     # print(compiled.co_lnotab.hex(" "))
-    # print(compiled.co_code.hex(" "))
-    # print(len(compiled.co_code)-4)
+    # # print(compiled.co_code.hex(" "))
+    # # print(len(compiled.co_code)-4)
     lines = crocoparser(code)
     print(lines)
     run(code)

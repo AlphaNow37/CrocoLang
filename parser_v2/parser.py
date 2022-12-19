@@ -27,7 +27,7 @@ class Parser:
             index = Indexer(code) + index
         obj, index = starter.parse(namespace, index, code)
         if index != len(code):
-            raise SyntaxError(f"Unexpected token {code[index]!r}")
+            raise SyntaxError(f"Unexpected token {code[index]!r}, line {index.line}, column {index.column}")
         return obj
 
     parse = _parse

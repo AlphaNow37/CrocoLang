@@ -101,6 +101,10 @@ class CodeGenerator:
 
     def next_line(self, nlines=1):
         ins_delta = len(self.instructions) - self._lineotab_last_ins
+        if ins_delta == 0:
+            return
+        elif ins_delta < 0:
+            raise ValueError("Going backward in line indexes is not possible")
         self._add_to_lnotab(ins_delta, self._lineotab_last_delta_line)
         self._lineotab_last_ins = len(self.instructions)
         self._lineotab_last_delta_line = nlines

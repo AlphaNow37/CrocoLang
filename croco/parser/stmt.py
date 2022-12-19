@@ -21,6 +21,7 @@ class Statement:
         return f"<{self._repr()} at {self.line}>"
 
     def to_stmt_code(self, gen: code_creator.CodeGenerator):
+        print(self)
         raise NotImplementedError
 
     def optimize(self):
