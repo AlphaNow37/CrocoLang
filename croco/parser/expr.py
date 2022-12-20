@@ -31,10 +31,21 @@ class Constant(Expr):
     def store(self, gen):
         raise SyntaxError("Cannot assign to a constant")
 
-class Number(Constant):
+class Int(Constant):
     @classmethod
     def from_toks(cls, toklist):
         return cls(int("".join(toklist)), toklist[0].start_line)
+
+class Float(Constant):
+    @classmethod
+    def from_toks(cls, toklist):
+        match toklist:
+            case [left, "." as p, right]:
+                return cls(float("".join(left) + "." + "".join(right)), p.start_line)
+            case ["." as p, right]:
+                return cls(float("." + "".join(right)), p.start_line)
+            case _:
+                raise SyntaxError("Invalid float literal")
 
 class String(Constant):
     @classmethod

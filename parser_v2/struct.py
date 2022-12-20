@@ -36,6 +36,9 @@ class BasicStruct:
     def __add__(self, other):
         return Seq(self, other)
 
+    def __radd__(self, other):
+        return Seq(other, self)
+
     def __or__(self, other):
         return Any(self, other)
 
@@ -62,7 +65,20 @@ class Str(BasicStruct):
             return tok, index + len(string)
         return None, index
 
-class Any(BasicStruct):
+class Finalisable(BasicStruct):
+    def __init__(self, factory):
+        super().__init__(factory)
+        self.is_final = False
+
+    def final(self):
+        self.is_final = True
+        return self
+
+    def set_factory(self, factory):
+        self.is_final = True
+        return super().set_factory(factory)
+
+class Any(Finalisable):
     def __init__(self, *values, factory=None):
         self.values = [_convert(value) for value in values]
         super().__init__(factory)
@@ -75,10 +91,12 @@ class Any(BasicStruct):
         return None, index
 
     def __or__(self, other):
+        if self.is_final:
+            return super().__or__(other)
         return Any(*self.values, other)
 
 
-class Sequence(BasicStruct):
+class Sequence(Finalisable):
     factory = tuple
     indexes = [slice(None, None, None)]
 
@@ -108,17 +126,12 @@ class Sequence(BasicStruct):
         return Sequence(*self.values, other)
 
     def set_factory(self, factory, indexes=None):
-        self.is_final = True
         if indexes is not None:
             self.indexes = indexes
         return super().set_factory(factory)
 
     def set_indexes(self, indexes):
         return self.set_factory(None, indexes)
-
-    def final(self):
-        self.is_final = True
-        return self
 
 Seq = Sequence
 

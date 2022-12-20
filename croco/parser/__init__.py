@@ -33,15 +33,20 @@ def join_elses(toklist):
     return block
 
 INLINE_SPACES = P.Any(*" \t") * P.REPEAT
-MULTILINE_SPACES = (P.Any(*" \t\n\r") * P.REPEAT).set_factory(lambda v: "")
+COMMENT = P.Str("#") + P.Not(P.END | "\n") * P.REPEAT
+MULTILINE_SPACES = (P.Any(*" \t\n\r", COMMENT) * P.REPEAT).set_factory(lambda v: "")
 def bracketed(value, brackets="()"):
+    def fmt(ns, *_, **__):  # Used because str.format() don't use normal expression, i can't add 1 ...
+        return f"Expected closing '{brackets[0]}', opened line {ns['bracket_opening'].start_line + 1}"
+    fmt.format = fmt
+
     return P.Sequence(
-        brackets[0],
+        P.SaveAs(brackets[0], "bracket_opening"),
         P.UNS(
             value,
             SPACES=MULTILINE_SPACES,
         ),
-        P.Expected(brackets[1], "Expected closing parenthesis line {i.line}"),
+        P.Expected(brackets[1], fmt),
     ).set_factory(lambda v: v, indexes=[1])
 
 def _spacable(v):
@@ -57,15 +62,18 @@ def operator(ops, sup, factory=expr.Op.from_toks):
 def parser():
     SPACES = INLINE_SPACES
 
-    NUMBER = (P.Any(*"0123456789") * P.MINI_1).set_factory(expr.Number.from_toks)
+    _DIGIT = P.Any(*"0123456789")
+    INT = (_DIGIT * P.MINI_1).set_factory(expr.Int.from_toks)
+    FLOAT = ((_DIGIT * P.MINI_1 + "." + _DIGIT * P.REPEAT)
+             | ("." + _DIGIT * P.MINI_1)).set_factory(expr.Float.from_toks, )
     STRING = P.Sequence(
         P.SaveAs(P.Any(*"'\""), "quote_char"),
         ~(P.Var("quote_char")) * P.REPEAT,
-        P.Var("quote_char").expect("Unclosed quote {ns['quote_char']}"),
+        P.Var("quote_char").expect("Unclosed quote '{ns['quote_char']}'"),
         factory=expr.String.from_toks)
 
 
-    CONSTANT = NUMBER | STRING
+    CONSTANT = FLOAT | INT | STRING
     IDENTIFIER = (P.Any(*"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_") * P.MINI_1).set_factory(
         expr.VarName.from_toks)
     SPACED_IDENTIFIER = _spacable(IDENTIFIER)
@@ -77,7 +85,7 @@ def parser():
     SECOND_LEVEL = (FIRST_LEVEL + (GETATTR | CALL | GETITEM) * P.REPEAT).set_factory(second_level)
 
     EXPONENT = operator(["**"], SECOND_LEVEL)
-    MULTIPLICATION = operator("*/", EXPONENT)
+    MULTIPLICATION = operator(["*", "//", "/", "%"], EXPONENT)
     ADDITION = operator("+-", MULTIPLICATION)
     COMPARISON = operator(cmp_op, ADDITION, factory=expr.CmpOp.from_toks)
 
@@ -107,7 +115,7 @@ def parser():
     ) + P.Not(_INDENT_CHARS, increment=0).expect("Too many indentations line {i.line} {i.column}", etype=IndentationError)
               ).set_factory(lambda v: "")
 
-    LINE = (INDENT + P.Repeat(STATEMENT, join=";") + (P.END | "\n")).set_factory(lambda v: v[1])
+    LINE = (INDENT + P.Repeat(STATEMENT, join=";") + COMMENT*P.OPT + (P.END | "\n")).set_factory(lambda v: v[1])
     EMPTY_LINE = (INLINE_SPACES + (P.END | "\n")).set_factory(lambda v: "")
 
     IF = P.Sequence("if", EXPECTED_EXPR, factory=blocks.If.from_toks)
@@ -147,9 +155,7 @@ def croco_compile(code, filename="Unkown", mode="exec"):
         raise
 
 def run(code, filename="Unkown", mode="exec"):
-    code = croco_compile(code, filename)
-    # import dis
-    # dis.dis(code)
+    code = croco_compile(code, filename, mode=mode)
     return exec(code) if mode == "exec" else eval(code)
 
 if __name__ == '__main__':
