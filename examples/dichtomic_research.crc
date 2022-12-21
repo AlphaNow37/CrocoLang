@@ -1,0 +1,18 @@
+l = list()
+for i in range(100):
+    l.append(i)
+searched = 12
+left = 0
+right = len(l)- 1
+while left <= right:
+    half = (left + right) // 2
+    print("testing at index", half, "with value", l[half])
+    if l[half] < searched:
+        left = half + 1
+    elif l[half] == searched:
+        print("Found at index", half)
+        break
+    else:
+        right = half - 1
+else:
+    print("Not found")
