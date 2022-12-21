@@ -62,7 +62,7 @@ class VarName(Expr):
 
     @classmethod
     def from_toks(cls, toklist):
-        return cls("".join(toklist), toklist[0].start_line)
+        return cls(toklist[0]+"".join(toklist[1]), toklist[0].start_line)
 
     def first_pass(self, ctx):
         self.ctx = ctx

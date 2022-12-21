@@ -38,7 +38,7 @@ class Parser:
 def parse(parser, code, start=None, namespace=None, index=0, /, **ns):
     if not issubclass(parser, Parser):
         raise TypeError("Parser must be a subclass of Parser")
-    return parser.parse(code, start=start, namespace=namespace | ns, index=index)
+    return parser.parse(code, start=start, namespace=(namespace or {}) | ns, index=index)
 
 def parse_file(parser, path, start=None, namespace=None, index=0, /, **ns):
     with open(path) as f:

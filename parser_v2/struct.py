@@ -6,10 +6,17 @@ def _get(val, namespace):
         return val.get(namespace)
     return val
 
+
+DBG_MODE = False
+
 class BasicStruct:
     factory = None
 
+    def __set_name__(self, owner, name):
+        self.name = name
+
     def __init__(self, factory=None):
+        self.name = None
         if factory is not None:
             self.factory = factory
 
@@ -25,6 +32,8 @@ class BasicStruct:
         return [obj]
 
     def parse(self, namespace, index: "Indexer", code) -> (object | None, int):
+        if DBG_MODE:
+            print(f"Parsing by {self.name if self.name else '?'}={self} started from {index}")
         obj, index = self._parse(namespace, index, code)
         if obj is not None and self.factory is not None:
             obj = self.factory(*self._getargs(obj))
@@ -50,6 +59,13 @@ class BasicStruct:
     def __invert__(self):
         return Not(self)
 
+    def __repr__(self):
+        if self.name:
+            return self.name
+        elif hasattr(self, "__str__"):
+            return str(self)
+        else:
+            return super().__repr__()
 
 class Str(BasicStruct):
     def __init__(self, value, factory=None):
@@ -64,6 +80,9 @@ class Str(BasicStruct):
             tok = index.get_token(len(string))
             return tok, index + len(string)
         return None, index
+
+    def __str__(self):
+        return f"{self.name or 'Str'}({self.value!r})"
 
 class Finalisable(BasicStruct):
     def __init__(self, factory):
@@ -94,6 +113,9 @@ class Any(Finalisable):
         if self.is_final:
             return super().__or__(other)
         return Any(*self.values, other)
+
+    def __str__(self):
+        return f"{self.name or 'Any'}({', '.join(map(repr, self.values))})"
 
 
 class Sequence(Finalisable):
@@ -133,6 +155,9 @@ class Sequence(Finalisable):
     def set_indexes(self, indexes):
         return self.set_factory(None, indexes)
 
+    def __str__(self):
+        return f"{self.name or 'Seq'}({', '.join(map(repr, self.values))})"
+
 Seq = Sequence
 
 class Repeat(BasicStruct):
@@ -155,6 +180,7 @@ class Repeat(BasicStruct):
         values = []
         joins = []
         first = True
+        original_index = index
         while True:
             last_index = index
             if not first and self.join is not None:
@@ -164,15 +190,16 @@ class Repeat(BasicStruct):
                 joins.append(join)
             value, index = self.struct.parse(namespace, index, code)
             if value is None:
+                index = last_index
                 break
             values.append(value)
             if maxi is not None and len(values) >= maxi:
                 break
             first = False
-            if index == last_index:
+            if index == last_index and self.maxi is None:
                 break
         if len(values) < mini:
-            return None, index
+            return None, original_index
         return (values, joins), index
 
     def _getargs(self, obj):
@@ -184,6 +211,16 @@ class Repeat(BasicStruct):
         self.pass_joiners = pass_joiners
         return super().set_factory(factory)
 
+    def __str__(self):
+        s = f"{self.name or 'Repeat'}({self.struct!r}"
+        if self.mini != 0:
+            s += f", mini={self.mini}"
+        if self.maxi is not None:
+            s += f", maxi={self.maxi}"
+        if self.join is not None:
+            s += f", join={self.join!r}"
+        return s + ")"
+
 class Expected(BasicStruct):
     def __init__(self, struct, message, factory=None, etype=SyntaxError):
         self.struct = _convert(struct)
@@ -191,19 +228,19 @@ class Expected(BasicStruct):
         self.etype = etype
         super().__init__(factory)
 
-    def __repr__(self):
-        return f"Expected({self.struct!r}, {self.message!r})"
-
     def _parse(self, namespace, index, code) -> (object | None, int):
         value, index = self.struct.parse(namespace, index, code)
         if value is None:
-            e = self.etype(self.message.format(i=index, code=code, ns=namespace))
+            e = self.etype(self.message.format(i=index, code=code, ns=namespace, line=index.line+1, col=index.column))
             e.lineno = index.line + 1
             # e.offset = index.column
             # e.end_offset = -1
             # e.end_lineno = index.line + 1
             raise e
         return value, index
+
+    def __str__(self):
+        return f"{self.name or '!'}({self.struct!r})"
 
 class Not(BasicStruct):
     def __init__(self, struct, factory=None, increment=1):
@@ -220,35 +257,47 @@ class Not(BasicStruct):
             return index.get_token(self.increment), right
         return None, index
 
+    def __str__(self):
+        return f"{self.name or '~'}({self.struct!r})"
+
 class UpdateNameSpace(BasicStruct):
     def __init__(self, struct, ns=None, /, **ns_):
         self.struct = _convert(struct)
         self.ns = (ns or {}) | ns_
         super().__init__()
 
-    def _parse(self, namespace, index, code) -> (object | None, int):
-        namespace = namespace | {key: _get(val, namespace) for (key, val) in self.ns.items()}
+    def _parse(self, lnamespace, index, code) -> (object | None, int):
+        namespace = lnamespace | {key: _get(val, lnamespace) for (key, val) in self.ns.items()}
         return self.struct.parse(namespace, index, code)
+
+    def __str__(self):
+        return f"{self.name or 'UNS'}({self.struct!r}, {self.ns})"
 
 UNS = UpdateNameSpace
 
 class SaveAs(BasicStruct):
     def __init__(self, struct, name, factory=None):
         self.struct = _convert(struct)
-        self.name = name
+        self.vname = name
         super().__init__(factory)
 
     def _parse(self, namespace, index, code) -> (object | None, int):
         value, index = self.struct.parse(namespace, index, code)
         if value is not None:
-            namespace[self.name] = value
+            namespace[self.vname] = value
         return value, index
+
+    def __str__(self):
+        return f"{self.name or 'SaveAs'}({self.struct!r}, {self.vname!r})"
 
 class End(BasicStruct):
     def _parse(self, namespace, index, code) -> (object | None, int):
         if index == len(code):
             return True, index
         return None, index
+
+    def __str__(self):
+        return f"{self.name or 'END'}"
 
 END = End()
 

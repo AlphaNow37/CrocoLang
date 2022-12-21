@@ -30,25 +30,25 @@ class Transformer(Partial):
         self.transform = transform
         super(Transformer, self).__init__()
 
-    def __repr__(self):
-        return f"Transformer({self.transform!r})"
+    def __str__(self):
+        return f"{self.name or 'Transformer'}({self.transform!r})"
 
     def get(self, namespace):
         return self.transform(namespace)
 
 class Var(Partial):
     def __init__(self, name):
-        self.name = name
+        self.vname = name
         super(Var, self).__init__()
 
-    def __repr__(self):
-        return f"Var({self.name})"
+    def __str__(self):
+        return f"{self.name or 'Var'}({self.vname})"
 
     def get(self, namespace):
         try:
-            return namespace[self.name]
+            return namespace[self.vname]
         except KeyError:
-            raise NameError(f"Variable {self.name} not found")
+            raise NameError(f"{self} : Variable {self.vname} not found")
 
 if __name__ == '__main__':
     p = (Var("a") + 1) * 2

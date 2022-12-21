@@ -27,7 +27,7 @@ class TestParser(unittest.TestCase):
         try:
             A("ghi")
         except SyntaxError as e:
-            self.assertEqual(str(e), "Expected abc or def")
+            self.assertTrue(str(e).startswith("Expected abc or def"))
         else:
             self.fail("SyntaxError not raised")
 
@@ -59,28 +59,37 @@ class TestParser(unittest.TestCase):
         """), {"aa": [1, 2, 3], "bb": {"a": 1, "b": "2"}})
 
     def test_indents(self):
-        class IndentParser(Parser, start="block"):
+        class IndentParser(Parser):
+            INDENT_CHAR = Any(" ")
             indent = 0
-            _char = " "
-            line_start = Sequence(
-                Repeat(_char, mini=Var("indent")),
-                (~(Str("\n") | Str(":\n")) * MINI_1).set_factory("".join),
-                factory=lambda v: v[1])
+            INDENT = INDENT_CHAR * Var("indent")
+            LINE = ((INDENT + Not(Any(*":\n")) * MINI_1).set_factory(lambda v: "".join(v[1]))
+                    + (Str(":\n") + UNS(Var("BLOCK"), indent=Var("indent").add(1))).set_factory(lambda v: v[1]) * OPT
+                    ).set_factory(lambda v: [v[0]] + v[1])
 
-            line = line_start\
-                + ((Str(":\n")
-                   + UNS(Var("block"), indent=Var('indent')+1)).set_factory(lambda v: v[1])*OPT
-                   ).set_factory(lambda v: (v[0] if v else []))
+            BLOCK = Repeat(LINE, mini=1, join="\n")
+            __start__ = BLOCK
 
-            block = Repeat(line, join="\n")
+        #
+        # class IndentParser(Parser, start="block"):
+        #     indent = 0
+        #     _char = " "
+        #     line_start = Sequence(
+        #         Repeat(_char, mini=Var("indent")),
+        #         (~(Str("\n") | Str(":\n")) * MINI_1).set_factory("".join),
+        #         factory=lambda v: v[1])
+        #
+        #     line = line_start\
+        #         + ((Str(":\n")
+        #            + UNS(Var("block"), indent=Var('indent').add(1))).set_factory(lambda v: v[1])*OPT
+        #            ).set_factory(lambda v: (v[0] if v else []))
+        #
+        #     block = Repeat(line, join="\n")
         r = IndentParser.parse("""
 aaa:
- bbb
+ hhh
+bbb:
  ccc
-ddd
-eee:
- fff:
-  ggg
 """[1:-1])
         # from json import dumps
         # print(dumps(r, indent=4))
