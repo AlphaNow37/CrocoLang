@@ -99,7 +99,11 @@ def parser():
     EXPONENT = operator(["**"], SECOND_LEVEL)
     MULTIPLICATION = operator(["*", "//", "/", "%"], EXPONENT)
     ADDITION = operator("+-", MULTIPLICATION)
-    COMPARISON = operator(("<=", "<", ">=", ">", "!=", "=="), ADDITION, factory=expr.CmpOp.from_toks)
+    BINSHIFTS = operator(["<<", ">>"], ADDITION)
+    BINAND = operator("&", BINSHIFTS)
+    BINXOR = operator("^", BINAND)
+    BINOR = operator("|", BINXOR)
+    COMPARISON = operator(("<=", "<", ">=", ">", "!=", "=="), BINOR, factory=expr.CmpOp.from_toks)
 
     TUPLE_EXPR = (COMPARISON + (P.Str(",") + COMPARISON) * P.REPEAT).set_factory(collections.get_tuple)
     BASE_EXPR = COMPARISON
