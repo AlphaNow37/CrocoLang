@@ -82,18 +82,18 @@ def parser():
 
     COLL_LITERALS = P.Any(*[
         bracketed(
-            P.Repeat(P.Var("EXPRESSION"), join=",")
+            P.Repeat(P.Var("BASE_EXPR"), join=",")
             + P.Str(",")*P.OPT + MULTILINE_SPACES,
             brackets=brackets, indexes=[1, 2]
         ).set_factory(collections.CollectionLitteral.from_toks)
         for brackets in ("[]", "{}")
     ])
 
-    FIRST_LEVEL = _spacable(CONSTANT | IDENTIFIER | COLL_LITERALS | bracketed(P.Var("EXPRESSION")))
+    FIRST_LEVEL = _spacable(CONSTANT | IDENTIFIER | COLL_LITERALS | bracketed(P.Var("EXPECTED_EXPR")))
 
     GETATTR = P.Sequence(".", SPACED_IDENTIFIER).set_factory(expr.GetAttr.from_toks)
-    CALL = bracketed(P.Var("EXPRESSION") * (0, None, ",")).set_factory(expr.Call.from_toks, indexes=[0, 1])
-    GETITEM = bracketed(P.Var("EXPRESSION"), "[]").set_factory(expr.GetItem.from_toks, indexes=[0, 1])
+    CALL = bracketed(P.Var("BASE_EXPR") * (0, None, ",")).set_factory(expr.Call.from_toks, indexes=[0, 1])
+    GETITEM = bracketed(P.Var("EXPECTED_EXPR"), "[]").set_factory(expr.GetItem.from_toks, indexes=[0, 1])
     SECOND_LEVEL = (FIRST_LEVEL + _spacable(GETATTR | CALL | GETITEM) * P.REPEAT).set_factory(second_level)
 
     EXPONENT = operator(["**"], SECOND_LEVEL)
@@ -101,10 +101,10 @@ def parser():
     ADDITION = operator("+-", MULTIPLICATION)
     COMPARISON = operator(("<=", "<", ">=", ">", "!=", "=="), ADDITION, factory=expr.CmpOp.from_toks)
 
-    EXPRESSION = (
-        COMPARISON
-    )
-    EXPECTED_EXPR = EXPRESSION.expect("expected an expression")
+    TUPLE_EXPR = (COMPARISON + (P.Str(",") + COMPARISON) * P.REPEAT).set_factory(collections.get_tuple)
+    BASE_EXPR = COMPARISON
+
+    EXPECTED_EXPR = TUPLE_EXPR.expect("expected an expression")
 
     _INPLACE_OP = P.Any(*"+-*/%@|&") | "//" | "**"
     AFFECTABLE = SECOND_LEVEL
@@ -117,7 +117,7 @@ def parser():
     STATEMENT = ((
         BREAK | CONTINUE | PASS
         | AFFECTATION
-        | EXPRESSION
+        | TUPLE_EXPR
     ) )# + INLINE_SPACES*P.REPEAT).set_factory(lambda v: v[0])
 
     indent = 0
@@ -133,9 +133,9 @@ def parser():
     IF = P.Sequence("if", EXPECTED_EXPR, factory=blocks.If.from_toks)
 
     WHILE = P.Sequence("while", EXPECTED_EXPR, factory=blocks.While.from_toks)
-    FOR = P.Sequence("for", AFFECTABLE, "in", EXPRESSION, factory=blocks.For.from_toks)
+    FOR = P.Sequence("for", AFFECTABLE, "in", TUPLE_EXPR, factory=blocks.For.from_toks)
 
-    ELIF = P.Sequence("elif", EXPRESSION, factory=blocks.If.from_toks)
+    ELIF = P.Sequence("elif", TUPLE_EXPR, factory=blocks.If.from_toks)
     ELSE = P.Sequence("else", factory=lambda toklist: blocks.FlowControl(None, toklist[0].start_line))
 
     def _make_flowcontrol(line):

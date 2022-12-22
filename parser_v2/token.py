@@ -19,10 +19,10 @@ class Indexer:
 
     def __add__(self, other):
         return Indexer(self.code, *self._add(other))
-
-    def __iadd__(self, other):
-        self.i, self.line, self.column = self._add(other)
-        return self
+    #
+    # def __iadd__(self, other):
+    #     self.i, self.line, self.column = self._add(other)
+    #     return self
 
     def __gt__(self, other):
         return self.i > getattr(other, 'i', other)

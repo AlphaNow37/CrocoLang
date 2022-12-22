@@ -29,3 +29,12 @@ class CollectionLitteral(Expr):
 
     def store(self, gen):
         raise NotImplementedError()
+
+def get_tuple(toks):
+    match toks:
+        case [expr, []]:
+            return expr
+        case [expr, pairs]:
+            return CollectionLitteral(expr, *(pair[1] for pair in pairs), ctype="tuple", line=pairs[-1][1].line)
+        case _:
+            raise ValueError("Unkown tuple")
