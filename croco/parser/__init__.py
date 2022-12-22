@@ -13,6 +13,10 @@ def croco_compile(code, filename="Unkown", mode="exec"):
 
 def run(code, filename="Unkown", mode="exec"):
     code = croco_compile(code, filename, mode=mode)
+    # import dis, opcode
+    # dis.dis(code)
+    # print(code.co_code, len(code.co_code))
+    # print([opcode.opname[i] for i in code.co_code[::2]])
     return exec(code) if mode == "exec" else eval(code)
 
 if __name__ == '__main__':

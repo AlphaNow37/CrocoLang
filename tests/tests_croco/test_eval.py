@@ -95,9 +95,9 @@ class TestEval(unittest.TestCase):
         for i in range(100):
             l.append(i)
         searched = 12
-        left = len(l)
+        left = 0
         right = len(l)- 1
-        while left < right:
+        while left <= right:
             half = (left + right) // 2
             if l[half] < searched:
                 left = half + 1
@@ -110,3 +110,13 @@ class TestEval(unittest.TestCase):
             print("Not found")
         """)
         croco.run(code, mode="eval")
+
+    def test_collection(self):
+        tests = {
+            "[1, 2, 3]": [1, 2, 3],
+            "[]": [],
+            "{,}": set(),
+            "[,]": [],
+            "{1, 2, 3}": {1, 2, 3}
+        }
+        self.assert_list(tests)

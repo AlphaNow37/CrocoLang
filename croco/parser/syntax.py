@@ -1,4 +1,4 @@
-from croco.parser import expr, stmt, blocks
+from croco.parser import expr, stmt, blocks, collections
 
 import parser_v2 as P
 
@@ -38,7 +38,7 @@ INLINE_SPACES = P.Any(*" \t", "\\\n") * P.REPEAT
 COMMENT = P.Str("#") + P.Not(P.END | "\n") * P.REPEAT
 MULTILINE_SPACES = (P.Any(*" \t\n\r", COMMENT) * P.REPEAT).set_factory(lambda v: "")
 
-def bracketed(value, brackets="()"):
+def bracketed(value, brackets="()", indexes=(1,)):
     def fmt(ns, *_, **__):  # Used because str.format() don't use normal expression, i can't add 1 ...
         return f"Expected closing '{brackets[0]}', opened line {ns['bracket_opening'].start_line + 1}"
     fmt.format = fmt
@@ -50,7 +50,7 @@ def bracketed(value, brackets="()"):
             SPACES=MULTILINE_SPACES,
         ),
         P.Expected(brackets[1], fmt),
-    ).set_factory(lambda v: v, indexes=[1])
+    ).set_factory(lambda v: v, indexes=indexes)
 
 def _spacable(v):
     return P.Sequence(P.Var("SPACES"), v, P.Var("SPACES")).set_factory(lambda v: v, indexes=[1])
@@ -80,7 +80,17 @@ def parser():
         expr.VarName.from_toks)
     SPACED_IDENTIFIER = _spacable(IDENTIFIER)
 
-    FIRST_LEVEL = _spacable(CONSTANT | IDENTIFIER | bracketed(P.Var("EXPRESSION")))
+    COLL_LITERALS = P.Any(*[
+        bracketed(
+            P.Repeat(P.Var("EXPRESSION"), join=",")
+            + P.Str(",")*P.OPT + MULTILINE_SPACES,
+            brackets=brackets, indexes=[1, 2]
+        ).set_factory(collections.CollectionLitteral.from_toks)
+        for brackets in ("[]", "{}")
+    ])
+
+    FIRST_LEVEL = _spacable(CONSTANT | IDENTIFIER | COLL_LITERALS | bracketed(P.Var("EXPRESSION")))
+
     GETATTR = P.Sequence(".", SPACED_IDENTIFIER).set_factory(expr.GetAttr.from_toks)
     CALL = bracketed(P.Var("EXPRESSION") * (0, None, ",")).set_factory(expr.Call.from_toks, indexes=[0, 1])
     GETITEM = bracketed(P.Var("EXPRESSION"), "[]").set_factory(expr.GetItem.from_toks, indexes=[0, 1])

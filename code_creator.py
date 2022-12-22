@@ -38,6 +38,12 @@ class CodeGenerator:
         self._lineotab_last_delta_line = 0
         self.last_line = 0
 
+        self.constants = []
+        self.names = []
+        self.varnames = []
+        self.freevars = []
+        self.cellvars = []
+
     def update_stacksize(self, stacksize):
         self.max_stacksize = max(self.max_stacksize, stacksize)
         self._stacksize = stacksize
@@ -118,26 +124,22 @@ class CodeGenerator:
 
     line = property(lambda self: self.last_line, go_line)
 
+    def cast_to_int(self, arg):
+        if isinstance(arg, int):
+            return arg
+        elif isinstance(arg, Vue):
+            return arg.get_value(self)
+        elif isinstance(arg, Partial):
+            return arg.get()
+        else:
+            raise ValueError(f"Unknown instruction type: {arg}")
+
     def get_codebytes(self):
-        b = bytearray()
-        for i in self.instructions:
-            if isinstance(i, int):
-                b.append(i)
-            elif isinstance(i, Vue):
-                b.append(i.get_value(self))
-            elif isinstance(i, Partial):
-                b.append(i.get())
-            else:
-                raise ValueError(f"Unknown instruction type: {i}")
-        return bytes(b)
+        return bytes(map(self.cast_to_int, self.instructions))
 
     def build(self) -> CodeType:
         self.next_line(0)
-        self.constants = []
-        self.names = []
-        self.varnames = []
-        self.freevars = []
-        self.cellvars = []
+
         codebytes = self.get_codebytes()
         # print(self.lineotab.hex(" "), "...")
         return CodeType(

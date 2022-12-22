@@ -17,4 +17,4 @@ while left <= right:
 else:
     print("Not found")
 print(l, searched)
-a = []
+print({1, 2, 3})
