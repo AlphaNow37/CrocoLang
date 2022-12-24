@@ -27,6 +27,18 @@ class TestEval(unittest.TestCase):
             "5%2": 1,
             "'abc'": "abc",
             '"abc"': "abc",
+            "1& 2": 0,
+            "1|2": 3,
+            "1^2": 3,
+            "1<<2": 4,
+            "4>>1": 2,
+            "1<2": True,
+            "1<=2": True,
+            "1>2": False,
+            "1>=2": False,
+            "1==2": False,
+            "1!=2": True,
+            "1+1;": 2,
         }
 
         self.assert_list(tests)
