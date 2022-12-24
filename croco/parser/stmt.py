@@ -52,9 +52,9 @@ class Affectation(Statement):
     @classmethod
     def from_toks(cls, toklist):
         match toklist:
-            case [var, [], "=" as eq, value]:
+            case [var, [], "=" as eq, _, value]:
                 return cls(var, value, eq.start_line)
-            case [var, [inplace_op], "=" as eq, value]:
+            case [var, [inplace_op], "=" as eq, _, value]:
                 return cls(var, value, eq.start_line, inplace_op=inplace_op)
             case _:
                 raise SyntaxError("Invalid affectation " + str(toklist))

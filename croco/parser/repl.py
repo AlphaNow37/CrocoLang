@@ -7,7 +7,7 @@ import time
 
 from parser_v2 import CharStream
 
-from croco.parser import crocoparser, croco_compile
+from croco.parser import croco_compile
 import linecache
 
 
